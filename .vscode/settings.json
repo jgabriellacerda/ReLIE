@@ -1,0 +1,4 @@
+{
+    "mypy.dmypyExecutable": "${workspaceFolder}/venv/bin/dmypy",
+    "editor.formatOnSave": true
+}

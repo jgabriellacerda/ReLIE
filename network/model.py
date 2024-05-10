@@ -10,11 +10,11 @@ from network.neighbour_embedding import NeighbourEmbedding
 
 class Model(nn.Module):
 
-    def __init__(self, vocab_size, embedding_dim, neighbours, heads):
+    def __init__(self, vocab_size, classes, embedding_dim, neighbours, heads):
         super().__init__()
 
         self.cand_embed = nn.Linear(2, 128)
-        self.field_embed = nn.Linear(3, embedding_dim)
+        self.field_embed = nn.Linear(classes, embedding_dim)
         self.embedding_dimension = embedding_dim
         self.neighbour_embeddings = NeighbourEmbedding(vocab_size, embedding_dim)
 

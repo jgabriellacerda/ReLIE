@@ -1,6 +1,10 @@
+import json
+from pathlib import Path
 import torch
 import cv2
-from utils import Neighbour, config, preprocess
+from network.model import Model
+from relie.config import ReLIEConfig
+from utils import Neighbour, preprocess
 import generate_tesseract_results
 import extract_candidates
 import pickle
@@ -8,6 +12,8 @@ import traceback
 import numpy as np
 import argparse
 import os
+
+from utils.config import BATCH_SIZE, CLASS_MAPPING, EMBEDDING_SIZE, EPOCHS, FL_GAMMA, HEADS, LR, NEIGHBOURS,VOCAB_SIZE
 
 
 def attach_neighbour_candidates(width, height, ocr_data, candidates):
@@ -29,9 +35,10 @@ def attach_neighbour_candidates(width, height, ocr_data, candidates):
     return candidates
 
 
-def load_saved_vocab(path):
-    cached_data = pickle.load(open(path, 'rb'))
-    return cached_data['vocab'], cached_data['mapping']
+def load_saved_vocab(path: Path):
+    vocab = json.loads((path / "vocab.json").read_text())
+    config = json.loads((path / "config.json").read_text())
+    return vocab, config["CLASS_MAPPING"]
 
 
 def parse_input(annotations, fields_dict, n_neighbours=5, vocabulary=None):
@@ -57,9 +64,12 @@ def parse_input(annotations, fields_dict, n_neighbours=5, vocabulary=None):
                 )
                 neighbours.append(_neighbours)
                 neighbour_cords.append(_neighbour_cords)
-    return torch.Tensor(field_ids).type(torch.FloatTensor), torch.Tensor(candidate_cords).type(
-        torch.FloatTensor), torch.Tensor(neighbours).type(torch.int64), torch.Tensor(neighbour_cords).type(
-        torch.FloatTensor)
+    return (
+        torch.Tensor(field_ids).type(torch.FloatTensor), 
+        torch.Tensor(candidate_cords).type(torch.FloatTensor), 
+        torch.Tensor(neighbours).type(torch.int64), 
+        torch.Tensor(neighbour_cords).type(torch.FloatTensor)
+        )
 
 
 def normalize_coordinates(annotations, width, height):
@@ -97,10 +107,7 @@ def parse_args():
     Parse input arguments
     """
     parser = argparse.ArgumentParser(description='Inference outputs')
-    parser.add_argument('--cached_pickle', dest='saved_path',
-                        help='Enter the path of the saved pickle during training',
-                        default='cached_data.pickle', type=str)
-    parser.add_argument('--load_saved_model', dest='load_model',
+    parser.add_argument('--model_path', dest='model_path',
                         help='directory to load models', default="model.pth",
                         type=str)
     parser.add_argument('--image', dest='image_path',
@@ -122,26 +129,40 @@ def main():
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
     if not os.path.exists(args.image_path):
         raise Exception("Image not found")
+    config = ReLIEConfig(
+        CLASS_MAPPING, 
+        NEIGHBOURS, 
+        HEADS, 
+        EMBEDDING_SIZE, 
+        VOCAB_SIZE, 
+        BATCH_SIZE, 
+        EPOCHS, 
+        LR,
+        0.0,
+        FL_GAMMA,
+        1,
+    )
     device = torch.device('cuda:0' if args.cuda else 'cpu')
     image = cv2.imread(args.image_path)
     height, width, _ = image.shape
-    ocr_results = generate_tesseract_results.get_tesseract_results(image)
-    vocab, class_mapping = load_saved_vocab(args.saved_path)
+    ocr_results = generate_tesseract_results.get_tesseract_results(args.image_path)
+    vocab, class_mapping = load_saved_vocab(Path(args.model_path))
     candidates = extract_candidates.get_candidates(ocr_results)
     candidates_with_neighbours = attach_neighbour_candidates(width, height, ocr_results, candidates)
     annotation = normalize_coordinates(candidates_with_neighbours, width, height)
     _data = parse_input(annotation, class_mapping, config.NEIGHBOURS, vocab)
     field_ids, candidate_cords, neighbours, neighbour_cords = _data
-    rlie = torch.load(args.load_model)
-    rlie = rlie.to(device)
+    relie = Model(len(vocab), len(config.CLASS_MAPPING), config.EMBEDDING_SIZE, config.NEIGHBOURS, config.HEADS)
+    relie.load_state_dict(torch.load(Path(args.model_path) / "model.pth"))
+    relie = relie.to(device)
     field_ids = field_ids.to(device)
     candidate_cords = candidate_cords.to(device)
     neighbours = neighbours.to(device)
     neighbour_cords = neighbour_cords.to(device)
     field_idx_candidate = np.argmax(field_ids.detach().to('cpu').numpy(), axis=1)
     with torch.no_grad():
-        rlie.eval()
-        val_outputs = rlie(field_ids, candidate_cords, neighbours, neighbour_cords)
+        relie.eval()
+        val_outputs = relie(field_ids, candidate_cords, neighbours, neighbour_cords, None)
     val_outputs = val_outputs.to('cpu').numpy()
     out = {cl: np.argmax(val_outputs[np.where(field_idx_candidate == cl)]) for cl in np.unique(field_idx_candidate)}
     true_candidate_color = (0, 255, 0)
@@ -158,6 +179,7 @@ def main():
     if args.visualize:
         cv2.imshow('Visualize', output_image)
         cv2.waitKey(0)
+    print(output_candidates)
     return output_candidates
 
 

@@ -9,7 +9,6 @@ def get_data(xml_path, split_name='train'):
 
     annotations = []
     classes_count = {}
-    class_mapping = {}
 
     split_file_path = config.SPLIT_DIR / f"{split_name}.txt"
     with open(split_file_path, 'r') as f:
@@ -27,18 +26,17 @@ def get_data(xml_path, split_name='train'):
 
             if len(element_objs) < 1:
                 continue
-
-            annotation_data = {'filename': annot.stem, 'width': element_width,
-                               'height': element_height, 'fields': {'invoice_no': {'true_candidates': [],
-                                                                                   'other_candidates': []},
-                                                                    'invoice_date': {'true_candidates': [],
-                                                                                     'other_candidates': []},
-                                                                    'total': {'true_candidates': [],
-                                                                              'other_candidates': []}}}
+            
+            fields =  {field: {'true_candidates': [],'other_candidates': []} for field in config.CLASS_MAPPING.keys()}
+            annotation_data = {
+                'filename': annot.stem, 
+                'width': element_width,
+                'height': element_height, 
+                'fields': fields
+            }
             for i, cls in enumerate(annotation_data['fields']):
                 if cls not in classes_count:
                     classes_count[cls] = 0
-                    class_mapping[cls] = i
 
             for element_obj in element_objs:
                 class_name = element_obj.find('name').text
@@ -62,7 +60,7 @@ def get_data(xml_path, split_name='train'):
         except Exception:
             print(traceback.format_exc())
 
-    return annotations, classes_count, class_mapping
+    return annotations, classes_count
 
 
 if __name__ == '__main__':

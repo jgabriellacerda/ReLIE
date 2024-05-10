@@ -1,16 +1,29 @@
+import json
+from pathlib import Path
 import torch
-from torch.utils import data
-from utils import config
+from torch.utils.data import DataLoader
+from relie.config import ReLIEConfig
 from network.model import Model
 from network import dataset
 from evaluate import evaluate
-from sklearn.metrics import recall_score
-from focal_loss.focal_loss import FocalLoss
+from sklearn.metrics import recall_score # type: ignore
+from focal_loss.focal_loss import FocalLoss # type: ignore
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+from utils.config import BATCH_SIZE, CLASS_MAPPING, EMBEDDING_SIZE, EPOCHS, FL_GAMMA, HEADS, LR, NEIGHBOURS, OUTPUT_DIR, VOCAB_SIZE
 
-def train(model, train_dataloader, val_dataloader, epochs):
+
+def train(
+        model: Model, 
+        train_dataloader: DataLoader, 
+        val_dataloader: DataLoader, 
+        epochs: int, 
+        config: ReLIEConfig,
+        output_path: Path,
+    ):
+
+    (output_path / "config.json").write_text(json.dumps(config.dict()))
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
@@ -59,8 +72,8 @@ def train(model, train_dataloader, val_dataloader, epochs):
         else:
             val_accuracy, val_loss, val_recall = evaluate(model, val_dataloader, criterion)
 
-            train_loss = train_loss / train_dataloader.sampler.num_samples
-            train_accuracy = train_accuracy / train_dataloader.sampler.num_samples
+            train_loss = train_loss / train_dataloader.sampler.num_samples # type: ignore
+            train_accuracy = train_accuracy / train_dataloader.sampler.num_samples # type: ignore
             recall = recall_score(y_labels, y_preds)
             train_loss_history.append(train_loss)
             train_accuracy_history.append(train_accuracy)
@@ -79,7 +92,7 @@ def train(model, train_dataloader, val_dataloader, epochs):
             if val_recall > val_max_score: # Saving the best model
                 print('saving model....')
                 val_max_score = val_recall
-                torch.save(model, 'output/model.pth')
+                torch.save(model.state_dict(), output_path / 'model.pth')
             print(f"Metrics for Epoch {epoch}:  Loss:{round(train_loss, 4)} \
                     Recall: {round(recall, 4)} \
                     Validation Loss: {round(val_loss, 4)} \
@@ -99,16 +112,30 @@ def train(model, train_dataloader, val_dataloader, epochs):
 
 if __name__ == '__main__':
 
+    config = ReLIEConfig(
+        CLASS_MAPPING, 
+        NEIGHBOURS, 
+        HEADS, 
+        EMBEDDING_SIZE, 
+        VOCAB_SIZE, 
+        BATCH_SIZE, 
+        EPOCHS, 
+        LR,
+        0.0,
+        FL_GAMMA,
+        1,
+    )
+
     # split name must equal to split filename eg: for train.txt -> train
-    train_data = dataset.DocumentsDataset(split_name='train')
-    val_data = dataset.DocumentsDataset(split_name='val')
+    train_data = dataset.DocumentsDataset(config, split_name='train')
+    val_data = dataset.DocumentsDataset(config, split_name='val')
 
     VOCAB_SIZE = len(train_data.vocab)
 
-    training_data = data.DataLoader(train_data, batch_size=config.BATCH_SIZE, shuffle=True)
-    validation_data = data.DataLoader(val_data, batch_size=config.BATCH_SIZE, shuffle=True)
+    training_data = DataLoader(train_data, batch_size=config.BATCH_SIZE, shuffle=True)
+    validation_data = DataLoader(val_data, batch_size=config.BATCH_SIZE, shuffle=True)
 
-    relie = Model(VOCAB_SIZE, config.EMBEDDING_SIZE, config.NEIGHBOURS, config.HEADS)
+    relie = Model(VOCAB_SIZE, len(config.CLASS_MAPPING), config.EMBEDDING_SIZE, config.NEIGHBOURS, config.HEADS)
     # relie = torch.load('output/model.pth')
-    history = train(relie, training_data, validation_data, config.EPOCHS)
+    history = train(relie, training_data, validation_data, config.EPOCHS, config, OUTPUT_DIR)
     print(history)
