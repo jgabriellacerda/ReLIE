@@ -1,4 +1,5 @@
 {
     "mypy.dmypyExecutable": "${workspaceFolder}/venv/bin/dmypy",
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-python.autopep8"
 }

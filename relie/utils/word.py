@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import Iterable, NamedTuple
+from typing import Iterable
 
-from relie.utils.operations import RectAdapter
-from relie.utils.rect import ImageSize, NormRect, Rect, SizesRect
+from relie.utils.rect import Rect
 from relie.utils.text import clean_text
 
 
@@ -10,8 +9,10 @@ from relie.utils.text import clean_text
 class Word:
     id: int
     text: str
+    start_char: int
+    end_char: int
     rect: Rect
-    type: str
+    type: str | None
     cleaned_text: str | None = None
 
     def __post_init__(self):
@@ -19,52 +20,13 @@ class Word:
 
     def __hash__(self) -> int:
         return hash(self.id)
+    
+    def __str__(self) -> str:
+        return self.text
 
 
-class SizesWord(NamedTuple):
-    id: int
-    text: str
-    rect: SizesRect
 
 
-class TypedSizesWord(NamedTuple):
-    id: int
-    text: str
-    rect: SizesRect
-    type: str
-
-
-class TypedWord(NamedTuple):
-    id: int
-    text: str
-    rect: SizesRect
-    type: str
-
-
-class NormWord(NamedTuple):
-    id: int
-    text: str
-    rect: NormRect
-
-
-class WordAdapter:
-
-    @staticmethod
-    def sizes_to_norm(word: SizesWord, image_size: ImageSize) -> NormWord:
-        return NormWord(word.id, word.text, RectAdapter.sizes_to_norm(word.rect, image_size))
-
-    @staticmethod
-    def norm_to_sizes(norm_word: NormWord, image_size: ImageSize) -> SizesWord:
-        return SizesWord(norm_word.id, norm_word.text, RectAdapter.norm_to_sizes(norm_word.rect, image_size))
-
-    @staticmethod
-    def typed_sizes_to_default(sizes_word: TypedSizesWord, image_size: ImageSize) -> Word:
-        return Word(
-            sizes_word.id,
-            sizes_word.text,
-            RectAdapter.sizes_to_default(sizes_word.rect, image_size),
-            sizes_word.type,
-        )
 
 
 class Utils:
@@ -104,3 +66,13 @@ class Utils:
             return 0
         inter_area = max(0, x_b - x_a) * max(0, y_b - y_a)
         return inter_area / float(box_b_area)
+
+    @staticmethod
+    def get_words_bounding_box(words: list[Word]) -> Rect:
+        x1 = min((word.rect.x1 for word in words))
+        y1 = min((word.rect.y1 for word in words))
+        x2 = max((word.rect.x2 for word in words))
+        y2 = max((word.rect.y2 for word in words))
+        width = x2 - x1
+        height = y2 - y1
+        return Rect(x1, y1, x2, y2, width, height)

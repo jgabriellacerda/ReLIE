@@ -8,7 +8,7 @@ import torch
 
 from relie.utils.rect import ImageSize, Rect
 from relie.utils.text import is_number
-from relie.utils.word import TypedSizesWord, Utils, Word, WordAdapter
+from relie.utils.word import  Utils, Word
 
 
 @dataclass
@@ -16,9 +16,13 @@ class Sentence:
     id: int
     words: tuple[Word, ...]
     rect: Rect
+    type: str | None = None
 
     def __hash__(self) -> int:
         return hash(self.id)
+    
+    def __str__(self) -> str:
+        return " ".join([word.text for word in self.words])
 
 
 @dataclass
@@ -34,9 +38,9 @@ class Document:
 
     def __init__(
         self,
-        original_words: list[TypedSizesWord],
-        typed_words: list[TypedSizesWord],
-        field_to_candidates_indexes: dict[str, list[int]],
+        words: list[Word],
+        sentences: list[Sentence],
+        candidates: list[Candidate],
         image_size: ImageSize,
         class_mapping: dict[str, int],
         vocab: dict[str, int],
@@ -47,39 +51,11 @@ class Document:
         self.vocab = vocab
         self.max_neighbours = max_neighbours
         self.device = device
-        self.words = [WordAdapter.typed_sizes_to_default(original_word, image_size)
-                      for original_word in original_words]
-        default_typed_words = [WordAdapter.typed_sizes_to_default(sentence_word, image_size)
-                               for sentence_word in typed_words]
-        self.sentences = self.__get_sentences(self.words, default_typed_words)
-        self.candidates = self.__get_candidates(self.sentences, field_to_candidates_indexes)
+        self.words = words
+        self.sentences = sentences
+        self.candidates = candidates
         self.size_proportion = image_size.width / image_size.height
 
-    def __get_sentences(self, words: list[Word], typed_words: list[Word]) -> list[Sentence]:
-        sentences = []
-        for id, sentence_word in enumerate(typed_words):
-            sentence_words = Utils.get_words_inside_area(words, sentence_word.rect)
-            rect = self.__get_bounding_box([w.rect for w in sentence_words])
-            sentence = Sentence(id, tuple(sentence_words), rect)
-            sentences.append(sentence)
-        return sentences
-
-    def __get_candidates(
-        self,
-        sentences: list[Sentence],
-            field_to_candidates_indexes: dict[str, list[int]]
-    ) -> list[Candidate]:
-        candidate_count = 0
-        candidates = []
-        for field, candidates_indexes in field_to_candidates_indexes.items():
-            for sentence_id in candidates_indexes:
-                sentence = sentences[sentence_id]
-                if sentence.id != sentence_id:
-                    raise ValueError("Something wrong with sentence IDs!")
-                candidate = Candidate(candidate_count, field, sentence)
-                candidates.append(candidate)
-                candidate_count += 1
-        return candidates
 
     def __attach_neighbours(self) -> None:
         for candidate in self.candidates:
@@ -109,14 +85,7 @@ class Document:
         height = y2 - y1
         return Rect(x1, y1, x2, y2, width, height)
 
-    def __get_bounding_box(self, rects: list[Rect]) -> Rect:
-        x1 = min((rect.x1 for rect in rects))
-        y1 = min((rect.y1 for rect in rects))
-        x2 = max((rect.x2 for rect in rects))
-        y2 = max((rect.y2 for rect in rects))
-        width = x2 - x1
-        height = y2 - y1
-        return Rect(x1, y1, x2, y2, width, height)
+
 
     def __sort_neighbours(
         self,

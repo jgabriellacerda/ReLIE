@@ -56,3 +56,5 @@ class Rect:
     def centroid(self):
         """ Normalized centroid. """
         return Point(self.x1 + self.width / 2, self.y1 + self.height / 2)
+
+

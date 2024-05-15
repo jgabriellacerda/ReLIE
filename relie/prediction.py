@@ -7,22 +7,19 @@ import torch
 from torch import Tensor
 
 from relie.config import ReLIEConfig
-from relie.document import Candidate, Document
+from relie.document import Candidate, Document, Sentence
 from network.model import Model
 from relie.utils.rect import ImageSize
-from relie.utils.word import TypedSizesWord
+from relie.utils.word import Word
 
 
 class ReLIEPredictor():
     def __init__(
             self,
             model_path: Path,
-            language: str,
             device: torch.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),
-
     ):
         self.model_path = model_path
-        self.language = language
         self.device = device
         self.relie, self.vocab, self.class_mapping = self.get_model()
 
@@ -34,8 +31,8 @@ class ReLIEPredictor():
             len(vocab),
             len(self.config.CLASS_MAPPING),
             self.config.EMBEDDING_SIZE,
-            self.config.HEADS,
             self.config.NEIGHBOURS,
+            self.config.HEADS,
             # self.config.DROPOUT
         )
         map_location = torch.device('cpu') if not torch.cuda.is_available() else None
@@ -46,15 +43,15 @@ class ReLIEPredictor():
 
     def run(
         self,
-        original_words: list[TypedSizesWord],
-        typed_words: list[TypedSizesWord],
-        field_to_candidates_indexes: dict[str, list[int]],
+        words: list[Word],
+        sentences: list[Sentence],
+        candidates: list[Candidate],
         image_size: ImageSize,
     ) -> tuple[dict[str, int], dict[str, float]]:
         document = Document(
-            original_words=original_words,
-            typed_words=typed_words,
-            field_to_candidates_indexes=field_to_candidates_indexes,
+            words=words,
+            sentences=sentences,
+            candidates=candidates,
             image_size=image_size,
             class_mapping=self.class_mapping,
             vocab=self.vocab,

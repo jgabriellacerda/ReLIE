@@ -127,15 +127,16 @@ if __name__ == '__main__':
     )
 
     # split name must equal to split filename eg: for train.txt -> train
-    train_data = dataset.DocumentsDataset(config, split_name='train')
-    val_data = dataset.DocumentsDataset(config, split_name='val')
 
-    VOCAB_SIZE = len(train_data.vocab)
+    train_data, vocab = dataset.preprocess_dataset(config, split_name='train')
+    train_dataset = dataset.DocumentsDataset(train_data)
+    val_data, _ = dataset.preprocess_dataset(config, split_name='val', vocab=vocab)
+    val_dataset = dataset.DocumentsDataset(val_data)
 
-    training_data = DataLoader(train_data, batch_size=config.BATCH_SIZE, shuffle=True)
-    validation_data = DataLoader(val_data, batch_size=config.BATCH_SIZE, shuffle=True)
+    training_data = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True)
+    validation_data = DataLoader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=True)
 
-    relie = Model(VOCAB_SIZE, len(config.CLASS_MAPPING), config.EMBEDDING_SIZE, config.NEIGHBOURS, config.HEADS)
+    relie = Model(len(vocab), len(config.CLASS_MAPPING), config.EMBEDDING_SIZE, config.NEIGHBOURS, config.HEADS)
     # relie = torch.load('output/model.pth')
     history = train(relie, training_data, validation_data, config.EPOCHS, config, OUTPUT_DIR)
     print(history)
