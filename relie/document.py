@@ -46,15 +46,17 @@ class Document:
         vocab: dict[str, int],
         max_neighbours: int,
         device: torch.device,
+        sort_neighbours: bool = False,
     ) -> None:
+        self.words = words
+        self.sentences = sentences
+        self.candidates = candidates
         self.class_mapping = class_mapping
         self.vocab = vocab
         self.max_neighbours = max_neighbours
         self.device = device
-        self.words = words
-        self.sentences = sentences
-        self.candidates = candidates
         self.size_proportion = image_size.width / image_size.height
+        self.sort_neighbours = sort_neighbours
 
 
     def __attach_neighbours(self) -> None:
@@ -74,7 +76,9 @@ class Document:
         neighbours = []
         search_area = self.__get_search_area(sentence, x_offset, y_offset)
         neighbours = Utils.find_words_intersecting_area(search_area, valid_neighbour_words)
-        return self.__sort_neighbours(sentence, neighbours)
+        if self.sort_neighbours:
+            neighbours = self.__sort_neighbours(sentence, neighbours)
+        return neighbours
 
     def __get_search_area(self, sentence: Sentence, x_offset: float, y_offset: float) -> Rect:
         x1 = sentence.rect.x1 - x_offset
@@ -84,8 +88,6 @@ class Document:
         width = x2 - x1
         height = y2 - y1
         return Rect(x1, y1, x2, y2, width, height)
-
-
 
     def __sort_neighbours(
         self,

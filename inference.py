@@ -68,9 +68,10 @@ def main():
             true_candidate_color, 
             5
         )
-    # if args.visualize:
-    #     cv2.imshow('Visualize', output_image)
-    #     cv2.waitKey(0)
+    if args.visualize:
+        # cv2.imshow('Visualize', output_image)
+        # cv2.waitKey(0)
+        cv2.imwrite("output/result.png", output_image)
     print(output_candidates)
     return output_candidates
 
